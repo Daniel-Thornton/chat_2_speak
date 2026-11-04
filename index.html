@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DanGPT</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="layout">
+
+        <!-- Header -->
+        <header>
+            <div class="header-left">
+                <img src="icons/danGPT_logo.png" class="header-logo" alt="">
+                <span class="header-title">DanGPT</span>
+                <span id="model-badge" class="model-badge"></span>
+            </div>
+            <div class="header-center">
+                <button id="conv-mode-btn" class="icon-btn" title="Conversation mode" aria-label="Conversation mode">
+                    <img id="conv-mode-icon" src="icons/conversationMode_b.png" alt="" width="20" height="20">
+                </button>
+            </div>
+            <div class="header-right">
+                <button id="chats-btn" class="icon-btn" title="Saved chats" aria-label="Saved chats">
+                    <img src="icons/history.png" alt="" width="16" height="16">
+                </button>
+                <button id="dark-mode-btn" class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+                    <img src="icons/mode-dark.png" alt="" width="16" height="16">
+                </button>
+                <button id="clear-btn" class="icon-btn" title="New chat" aria-label="New chat">
+                    <img id="new-chat-icon" src="icons/new_chat_dark.png" alt="" width="16" height="16">
+                </button>
+                <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
+                    <img src="icons/settings.png" alt="" width="16" height="16">
+                </button>
+            </div>
+        </header>
+
+        <!-- Timers counting down, and reminders coming up (both modes) -->
+        <div id="timer-bar" class="timer-bar hidden" role="status" aria-label="Timers and reminders"></div>
+
+        <!-- Settings modal -->
+        <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Settings">
+            <div class="modal-content">
+                <div class="modal-titlebar">
+                    <span class="modal-titlebar-title">
+                        <img src="icons/settings.png" width="14" height="14" alt="">
+                        Settings
+                    </span>
+                    <button class="modal-titlebar-close" id="close-settings-x">&#x2715;</button>
+                </div>
+                <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+                    <button type="button" class="settings-tab" role="tab" id="settings-tab-general" data-tab="general" aria-controls="settings-panel-general">General</button>
+                    <button type="button" class="settings-tab" role="tab" id="settings-tab-model" data-tab="model" aria-controls="settings-panel-model">Model</button>
+                    <button type="button" class="settings-tab" role="tab" id="settings-tab-voice" data-tab="voice" aria-controls="settings-panel-voice">Voice</button>
+                    <button type="button" class="settings-tab" role="tab" id="settings-tab-conversation" data-tab="conversation" aria-controls="settings-panel-conversation">Conversation</button>
+                    <button type="button" class="settings-tab" role="tab" id="settings-tab-tools" data-tab="tools" aria-controls="settings-panel-tools">Tools</button>
+                </div>
+                <div class="modal-body settings-body">
+                    <div class="settings-panel" id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general">
+                        <label for="tunnel-url">
+                        Server / Cloudflare Tunnel URL
+                        <span class="label-hint">Leave blank when you opened this page from the server itself (localhost or the tunnel URL). Web search is on the Tools tab.</span>
+                        <input type="url" id="tunnel-url" placeholder="https://xxxx-xxxx.trycloudflare.com" autocomplete="off" spellcheck="false">
+                    </label>
+                        <label for="summary-every">
+                            Chat titles and summaries
+                            <span class="label-hint">Each saved chat gets a title and a short summary, written by the model after the first reply and then rewritten as the conversation goes on, so they describe the whole chat.</span>
+                            <select id="summary-every">
+                                <option value="4">Update every 4 messages</option>
+                                <option value="6">Update every 6 messages</option>
+                                <option value="10">Update every 10 messages</option>
+                                <option value="20">Update every 20 messages</option>
+                                <option value="0">Only once, after the first reply</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="settings-panel" id="settings-panel-model" role="tabpanel" aria-labelledby="settings-tab-model">
+                        <label for="model-name">
+                        Ollama Model
+                        <span class="label-hint">Small models (llama3.2, qwen3.5:4b, gemma4:e4b) answer fastest in voice mode</span>
+                        <input type="text" id="model-name" placeholder="llama3.2" autocomplete="off" spellcheck="false" list="model-list">
+                        <datalist id="model-list"></datalist>
+                    </label>
+                    <label for="think-mode">
+                        Thinking
+                        <span class="label-hint">For reasoning models (qwen3.5, deepseek-r1, gpt-oss…): their thinking is shown in a panel under the chat. Low/Medium/High are for models with levels, like gpt-oss. Models that can't think just answer.</span>
+                        <select id="think-mode">
+                            <option value="on">On</option>
+                            <option value="off">Off</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                            <option value="default">Model default</option>
+                        </select>
+                    </label>
+                    <label class="settings-check">
+                        <input type="checkbox" id="think-voice">
+                        Think in voice mode too
+                        <span class="label-hint">It reasons before it starts speaking, which can mean several seconds of silence.</span>
+                    </label>
+                        <label for="system-prompt">
+                        System Prompt
+                        <span class="label-hint">Defines how the assistant behaves. In conversation mode, the voice-mode instructions (Conversation tab) are added after it.</span>
+                        <textarea id="system-prompt" rows="6" placeholder="You are a helpful assistant..."></textarea>
+                    </label>
+                    </div>
+                    <div class="settings-panel" id="settings-panel-voice" role="tabpanel" aria-labelledby="settings-tab-voice">
+                        <label for="voice-preset">
+                            Voice
+                            <select id="voice-preset"></select>
+                        </label>
+                        <label for="voice-instruction">
+                            Voice description
+                            <span class="label-hint">Breeze designs the voice from this. Edit it freely: age, accent, tone, pace.</span>
+                            <textarea id="voice-instruction" rows="4"></textarea>
+                        </label>
+                        <div class="settings-row">
+                            <label for="voice-seed" class="settings-inline">
+                                Variation
+                                <input type="number" id="voice-seed" min="0" max="999999" step="1">
+                            </label>
+                            <button type="button" id="voice-reroll" class="btn" title="Try a different variation of this voice">🎲 Re-roll</button>
+                            <button type="button" id="voice-preview" class="btn">▶ Preview</button>
+                        </div>
+                        <span class="label-hint" id="voice-preview-status"></span>
+                    </div>
+                    <div class="settings-panel" id="settings-panel-conversation" role="tabpanel" aria-labelledby="settings-tab-conversation">
+                        <label class="settings-check">
+                            <input type="checkbox" id="barge-in">
+                            Let me interrupt by talking over it
+                            <span class="label-hint">On speakers it relies on your browser's echo cancellation, which can muffle you while it talks.</span>
+                        </label>
+                        <label class="settings-check">
+                            <input type="checkbox" id="headphones">
+                            I'm using headphones
+                            <span class="label-hint">Turns echo cancellation off so it hears you clearly while it's talking, which makes interrupting much more reliable. Don't use this with speakers or it will hear itself.</span>
+                        </label>
+                        <label for="end-silence">
+                            Pause before it replies
+                            <select id="end-silence">
+                                <option value="500">Short (0.5 s)</option>
+                                <option value="750">Normal (0.75 s)</option>
+                                <option value="1100">Relaxed (1.1 s)</option>
+                                <option value="1600">Long (1.6 s)</option>
+                            </select>
+                        </label>
+                        <label for="mic-sensitivity">
+                            Microphone sensitivity
+                            <select id="mic-sensitivity">
+                                <option value="low">Low (noisy room)</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High (quiet voice / far mic)</option>
+                            </select>
+                        </label>
+                        <label for="stt-language">
+                            Spoken language
+                            <select id="stt-language">
+                                <option value="en">English</option>
+                                <option value="auto">Detect automatically</option>
+                                <option value="zh">Chinese</option>
+                            </select>
+                        </label>
+                        <label class="settings-check">
+                            <input type="checkbox" id="speak-replies">
+                            Read replies aloud in text chat too
+                        </label>
+                        <label for="voice-prompt">
+                            Voice-mode instructions
+                            <span class="label-hint">Added after the System Prompt (Model tab), only in conversation mode. Edit or delete any line; leave it empty to add nothing.</span>
+                            <textarea id="voice-prompt" rows="9" spellcheck="false"></textarea>
+                        </label>
+                        <div class="settings-row">
+                            <button type="button" id="voice-prompt-reset" class="btn">Restore default</button>
+                            <span class="label-hint" id="voice-prompt-status"></span>
+                        </div>
+                    </div>
+                    <div class="settings-panel" id="settings-panel-tools" role="tabpanel" aria-labelledby="settings-tab-tools">
+                        <span class="label-hint">Things it can do for you when you ask, in text or voice. Turn off anything you'd rather it didn't use.</span>
+                        <label class="settings-check">
+                            <input type="checkbox" id="tool-reminders">
+                            Timers and reminders
+                            <span class="label-hint">“Set a timer for ten minutes”, “remind me at 3 to call Mum”. It says so when one goes off. If no DanGPT page is open then, you get a Windows notification and it tells you when you next open it.</span>
+                        </label>
+                        <label class="settings-check">
+                            <input type="checkbox" id="tool-memory">
+                            Memory
+                            <span class="label-hint">“Remember that I'm vegetarian.” What it remembers goes into every chat, so it knows next time too.</span>
+                        </label>
+                        <label class="settings-check">
+                            <input type="checkbox" id="tool-lists">
+                            Lists
+                            <span class="label-hint">“Put milk and eggs on the shopping list”, “what's on my to-do list?”</span>
+                        </label>
+                        <label class="settings-check">
+                            <input type="checkbox" id="tool-pc">
+                            Open apps, websites and folders on this PC
+                            <span class="label-hint">“Open Steam”, “pull up the BBC weather”, “open my downloads”. Only when you're using DanGPT on this PC itself, never from another device through the tunnel.</span>
+                        </label>
+                        <label class="settings-check">
+                            <input type="checkbox" id="tool-places">
+                            Weather and travel times
+                            <span class="label-hint">“Will it rain tomorrow?”, “what's Paris like this weekend?”, “how long to drive to Glasgow?”. Real forecasts from Open-Meteo, and routes from OpenStreetMap, with a Google Maps directions link on screen (that covers public transport too). Free, with no account.</span>
+                        </label>
+                        <div class="settings-sub">
+                            <label for="home-place">
+                                Home
+                                <span class="label-hint">For the weather and travel times when you don't say where. A town, or a postcode or address so journeys start from your door. You can also just tell it where you live.</span>
+                            </label>
+                            <div class="settings-row">
+                                <input type="text" id="home-place" placeholder="e.g. Edinburgh, or EH1 1RE" autocomplete="off" spellcheck="false">
+                                <button type="button" id="home-set" class="btn">Set</button>
+                            </div>
+                            <span id="home-status" class="label-hint"></span>
+                        </div>
+                        <label class="settings-check">
+                            <input type="checkbox" id="tool-calendar">
+                            Calendar
+                            <span class="label-hint">“What's on tomorrow?”, “when's my dentist?”, “am I free on Friday?”. Read from your calendar's secret iCal address. “Add the dentist on Friday at 3” puts a link on screen that opens Google Calendar with it filled in, for you to save.</span>
+                        </label>
+                        <div class="settings-sub" id="gcal-box">Loading…</div>
+                        <label class="settings-check">
+                            <input type="checkbox" id="tool-keep">
+                            Google Keep
+                            <span class="label-hint">“Make a note that the boiler code is 4417”, “add milk and eggs to my shopping list”, “what's on my shopping list?”. Notes and lists go in your real Keep, so they're on your phone too. While it's connected, lists go to Keep instead of DanGPT's own lists.</span>
+                        </label>
+                        <div class="settings-sub" id="keep-box">Loading…</div>
+                        <label class="settings-check">
+                            <input type="checkbox" id="tool-youtube">
+                            YouTube
+                            <span class="label-hint">“Find Yungfika's rage room stream and tell me what he said about the H3 drama”, or paste a video link. It reads the video's captions, and picks out the parts that answer your question, with links that jump to those moments. Videos with no captions (often long streams) are transcribed on this PC by Whisper in the background (a 5½-hour stream takes about 3 minutes), and it tells you when that's done.</span>
+                        </label>
+                        <label for="brave-api-key">
+                            Web search: Brave Search API key
+                            <span class="label-hint">Optional. Lets it look things up. Free key at brave.com/search/api</span>
+                            <input type="password" id="brave-api-key" placeholder="BSA..." autocomplete="off" spellcheck="false">
+                        </label>
+                        <fieldset class="settings-group">
+                            <legend>What it's keeping</legend>
+                            <span class="label-hint">Stored on this PC in data/agent.json. Deleting here happens straight away.</span>
+                            <div id="agent-data" class="agent-data">Loading…</div>
+                        </fieldset>
+                    </div>
+                </div>
+                <div class="settings-footer">
+                    <div class="modal-actions">
+                            <button id="save-settings" class="btn primary">Save</button>
+                            <button id="close-settings" class="btn">Cancel</button>
+                        </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- "Save this chat?" (starting a new chat, or opening another, with this one unsaved) -->
+        <div id="save-modal" class="modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="save-modal-title" aria-describedby="save-modal-text">
+            <div class="modal-content save-modal-content">
+                <div class="modal-titlebar">
+                    <span class="modal-titlebar-title" id="save-modal-title">
+                        <img src="icons/history.png" width="14" height="14" alt="">
+                        DanGPT
+                    </span>
+                    <button class="modal-titlebar-close" id="save-modal-x" aria-label="Cancel">&#x2715;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="save-modal-row">
+                        <img src="icons/danGPT_logo.png" width="32" height="32" alt="" class="save-modal-icon">
+                        <div class="save-modal-text" id="save-modal-text">Do you want to save this chat?</div>
+                    </div>
+                    <label for="save-modal-name">
+                        Title
+                        <input type="text" id="save-modal-name" autocomplete="off" spellcheck="false" maxlength="80">
+                    </label>
+                    <div class="modal-actions">
+                        <button id="save-modal-save" class="btn primary">Save</button>
+                        <button id="save-modal-discard" class="btn">Don't Save</button>
+                        <button id="save-modal-cancel" class="btn">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chats modal -->
+        <div id="chats-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Saved chats">
+            <div class="modal-content">
+                <div class="modal-titlebar">
+                    <span class="modal-titlebar-title">
+                        <img src="icons/history.png" width="14" height="14" alt="">
+                        Saved Chats
+                    </span>
+                    <button class="modal-titlebar-close" id="close-chats-x">&#x2715;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="chats-header">
+                        <button id="new-chat-btn" class="btn">
+                            <img src="icons/new_chat_dark.png" width="13" height="13" alt="" id="new-chat-modal-icon"> New Chat
+                        </button>
+                    </div>
+                    <div id="chats-list" class="chats-list"></div>
+                    <div class="modal-actions">
+                        <button id="close-chats" class="btn">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <main id="messages" class="messages" aria-live="polite" aria-label="Conversation">
+            <div class="welcome" id="welcome">
+                <p>Start a conversation below.</p>
+                <p class="welcome-hint">Enter to send &nbsp;&middot;&nbsp; Shift+Enter for new line</p>
+                <p class="welcome-hint">Want to talk instead? Tap the conversation button at the top.</p>
+            </div>
+        </main>
+
+        <!-- Conversation mode panel -->
+        <div id="conv-panel" class="conv-panel hidden" aria-label="Conversation mode">
+            <div class="conv-banner hidden" id="conv-banner" role="status"></div>
+            <div class="conv-status-text" id="conv-status">Starting…</div>
+            <div class="conv-visualizer" id="conv-visualizer" aria-hidden="true">
+            </div>
+            <button id="conv-record-btn" class="conv-record-btn" title="Mute microphone" aria-label="Mute microphone">
+                <img id="conv-record-icon" src="icons/microphone-0.png" alt="" width="32" height="32">
+                <img class="conv-restrict" src="icons/restrict-1.png" alt="" width="32" height="32">
+            </button>
+            <div class="conv-hint" id="conv-hint">Just start talking. Tap the button to mute.</div>
+            <div class="conv-transcript" id="conv-transcript" aria-live="polite"></div>
+            <div class="conv-links hidden" id="conv-links">
+                <div class="conv-links-head">🔗 Links <button type="button" class="conv-links-clear" id="conv-links-clear" title="Clear the links" aria-label="Clear the links">✕</button></div>
+                <div id="conv-links-list"></div>
+            </div>
+            <div class="conv-notice hidden" id="conv-notice" role="status"></div>
+            <div class="conv-composer" id="conv-composer">
+                <div class="conv-chips hidden" id="conv-chips"></div>
+                <div class="conv-compose-row">
+                    <input type="file" id="conv-file-input" accept="image/*,text/*,.md,.csv,.json,.py,.js,.ts,.html,.log" multiple hidden>
+                    <button id="conv-image-btn" class="icon-btn" type="button" title="Add an image or text file" aria-label="Add an image or text file">
+                        <img src="icons/image_upload.png" alt="" width="16" height="16">
+                    </button>
+                    <textarea id="conv-text" class="user-input conv-text" rows="1"
+                        placeholder="Paste a link, text or an image while you talk…"
+                        aria-label="Add text, links or images to the conversation"></textarea>
+                    <button id="conv-send-btn" class="send-btn" type="button" aria-label="Send now">
+                        <img src="icons/send.png" alt="" width="14" height="14">
+                        Send
+                    </button>
+                </div>
+                <div class="conv-compose-hint" id="conv-compose-hint">Anything here goes with what you say next. Enter sends it now.</div>
+            </div>
+        </div>
+
+        <!-- Thinking window (reasoning models) -->
+        <section id="thinking-pane" class="thinking-pane hidden" aria-label="Model thinking">
+            <div class="thinking-resize" title="Drag to resize"></div>
+            <div class="thinking-titlebar">
+                <span class="thinking-label">Thinking</span>
+                <span class="thinking-meta" aria-live="off"></span>
+                <span class="thinking-spacer"></span>
+                <button class="thinking-collapse" type="button" title="Collapse">▾</button>
+                <button class="thinking-close" type="button" title="Close (reopens on the next reply that thinks)">✕</button>
+            </div>
+            <div class="thinking-body"></div>
+        </section>
+
+        <!-- Input area -->
+        <div class="input-area">
+            <div id="image-preview-bar" class="image-preview-bar hidden"></div>
+            <div class="input-bar">
+                <input type="file" id="image-input" accept="image/*" multiple style="display:none">
+                <button id="image-btn" class="icon-btn" title="Attach image" aria-label="Attach image">
+                    <img src="icons/image_upload.png" alt="" width="16" height="16">
+                </button>
+                <button id="mic-btn" class="icon-btn" title="Voice input" aria-label="Start voice input">
+                    <img src="icons/microphone-0.png" alt="" width="16" height="16">
+                </button>
+                <textarea
+                    id="user-input"
+                    class="user-input"
+                    placeholder="Message..."
+                    rows="1"
+                    aria-label="Message input"
+                ></textarea>
+                <button id="send-btn" class="send-btn" aria-label="Send">
+                    <img src="icons/send.png" alt="" width="14" height="14">
+                    Send
+                </button>
+            </div>
+        </div>
+
+        <!-- Win98 Status Bar -->
+        <div class="win-statusbar">
+            <div class="win-statusbar-panel" id="status-text">Ready</div>
+            <div class="win-statusbar-panel win-statusbar-grow"></div>
+        </div>
+
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

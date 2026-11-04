@@ -1,0 +1,24 @@
+# Personal data, made while DanGPT runs (never commit these)
+# data/: memory, lists, reminders, the calendar's secret address, the Google Keep sign-in, transcripts
+# chats/: saved chats.  voices/: designed Breeze voices (rebuilt on first use)
+data/
+chats/
+voices/
+
+# Python environments and downloaded models (the launcher builds / downloads them)
+stt/.venv/
+tts/venv/
+tts/*.onnx
+tts/*.bin
+__pycache__/
+*.pyc
+
+# Downloaded tool (get it from github.com/cloudflare/cloudflared/releases)
+cloudflared-windows-amd64.exe
+
+# Local tooling
+.claude/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

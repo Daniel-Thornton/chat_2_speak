@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DanGPT</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="layout">
+
+        <!-- Header -->
+        <header>
+            <div class="header-left">
+                <img src="icons/danGPT_logo.png" class="header-logo" alt="">
+                <span class="header-title">DanGPT</span>
+                <span id="model-badge" class="model-badge"></span>
+            </div>
+            <div class="header-center">
+                <button id="conv-mode-btn" class="icon-btn" title="Conversation mode" aria-label="Conversation mode">
+                    <img id="conv-mode-icon" src="icons/conversationMode_b.png" alt="" width="20" height="20">
+                </button>
+            </div>
+            <div class="header-right">
+                <button id="chats-btn" class="icon-btn" title="Saved chats" aria-label="Saved chats">
+                    <img src="icons/history.png" alt="" width="16" height="16">
+                </button>
+                <button id="dark-mode-btn" class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+                    <img src="icons/mode-dark.png" alt="" width="16" height="16">
+                </button>
+                <button id="clear-btn" class="icon-btn" title="New chat" aria-label="New chat">
+                    <img id="new-chat-icon" src="icons/new_chat_dark.png" alt="" width="16" height="16">
+                </button>
+                <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
+                    <img src="icons/settings.png" alt="" width="16" height="16">
+                </button>
+            </div>
+        </header>
+
+        <!-- Settings modal -->
+        <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Settings">
+            <div class="modal-content">
+                <div class="modal-titlebar">
+                    <span class="modal-titlebar-title">
+                        <img src="icons/settings.png" width="14" height="14" alt="">
+                        Settings
+                    </span>
+                    <button class="modal-titlebar-close" id="close-settings-x">&#x2715;</button>
+                </div>
+                <div class="modal-body">
+                    <label for="tunnel-url">
+                        Cloudflare Tunnel URL
+                        <span class="label-hint">Same URL as your calorie logger tunnel</span>
+                        <input type="url" id="tunnel-url" placeholder="https://xxxx-xxxx.trycloudflare.com" autocomplete="off" spellcheck="false">
+                    </label>
+                    <label for="model-name">
+                        Ollama Model
+                        <input type="text" id="model-name" placeholder="llama3.2" autocomplete="off" spellcheck="false">
+                    </label>
+                    <label for="brave-api-key">
+                        Brave Search API Key
+                        <span class="label-hint">Optional — enables web search. Free key at brave.com/search/api</span>
+                        <input type="password" id="brave-api-key" placeholder="BSA..." autocomplete="off" spellcheck="false">
+                    </label>
+                    <label for="system-prompt">
+                        System Prompt
+                        <span class="label-hint">Defines how the assistant behaves</span>
+                        <textarea id="system-prompt" rows="6" placeholder="You are a helpful assistant..."></textarea>
+                    </label>
+                    <div class="modal-actions">
+                        <button id="save-settings" class="btn primary">Save</button>
+                        <button id="close-settings" class="btn">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chats modal -->
+        <div id="chats-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Saved chats">
+            <div class="modal-content">
+                <div class="modal-titlebar">
+                    <span class="modal-titlebar-title">
+                        <img src="icons/history.png" width="14" height="14" alt="">
+                        Saved Chats
+                    </span>
+                    <button class="modal-titlebar-close" id="close-chats-x">&#x2715;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="chats-header">
+                        <button id="new-chat-btn" class="btn">
+                            <img src="icons/new_chat_dark.png" width="13" height="13" alt="" id="new-chat-modal-icon"> New Chat
+                        </button>
+                    </div>
+                    <div id="chats-list" class="chats-list"></div>
+                    <div class="modal-actions">
+                        <button id="close-chats" class="btn">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <main id="messages" class="messages" aria-live="polite" aria-label="Conversation">
+            <div class="welcome" id="welcome">
+                <p>Start a conversation below.</p>
+                <p class="welcome-hint">Enter to send &nbsp;&middot;&nbsp; Shift+Enter for new line</p>
+            </div>
+        </main>
+
+        <!-- Conversation mode panel -->
+        <div id="conv-panel" class="conv-panel hidden" aria-label="Conversation mode">
+            <div class="conv-status-text" id="conv-status">Tap the microphone to speak</div>
+            <div class="conv-visualizer" id="conv-visualizer">
+                <div class="conv-wave"></div>
+                <div class="conv-wave"></div>
+                <div class="conv-wave"></div>
+                <div class="conv-wave"></div>
+                <div class="conv-wave"></div>
+            </div>
+            <button id="conv-record-btn" class="conv-record-btn" title="Start recording" aria-label="Start recording">
+                <img id="conv-record-icon" src="icons/microphone-0.png" alt="" width="32" height="32">
+            </button>
+            <div class="conv-transcript" id="conv-transcript"></div>
+        </div>
+
+        <!-- Input area -->
+        <div class="input-area">
+            <div id="image-preview-bar" class="image-preview-bar hidden"></div>
+            <div class="input-bar">
+                <input type="file" id="image-input" accept="image/*" multiple style="display:none">
+                <button id="image-btn" class="icon-btn" title="Attach image" aria-label="Attach image">
+                    <img src="icons/image_upload.png" alt="" width="16" height="16">
+                </button>
+                <button id="mic-btn" class="icon-btn" title="Voice input" aria-label="Start voice input">
+                    <img src="icons/microphone-0.png" alt="" width="16" height="16">
+                </button>
+                <textarea
+                    id="user-input"
+                    class="user-input"
+                    placeholder="Message..."
+                    rows="1"
+                    aria-label="Message input"
+                ></textarea>
+                <button id="send-btn" class="send-btn" aria-label="Send">
+                    <img src="icons/send.png" alt="" width="14" height="14">
+                    Send
+                </button>
+            </div>
+        </div>
+
+        <!-- Win98 Status Bar -->
+        <div class="win-statusbar">
+            <div class="win-statusbar-panel" id="status-text">Ready</div>
+            <div class="win-statusbar-panel win-statusbar-grow"></div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+faster-whisper>=1.1
+fastapi>=0.110
+uvicorn[standard]>=0.29
+numpy
+# CTranslate2 also needs cuBLAS 12 + cuDNN 9 DLLs. The launcher borrows them from Breeze's PyTorch
+# install (torch\lib) when it's there; otherwise it installs requirements-cuda.txt.
+yt-dlp>=2025.1
+gkeepapi>=0.16
