@@ -755,10 +755,37 @@ function designedVoice(instruction, seed) {
     return job;
 }
 
+// A voice is either designed from a description, or cloned from the user's own audio sample
+// (`clone` = the sample's id, `refText` = what is said in it).
 function parseVoice(body) {
     const instruction = String(body.instruction || '').trim().slice(0, 600);
     const seed = Math.abs(parseInt(body.seed, 10) || 0) % 1000000;
-    return { instruction, seed };
+    const clone = /^[0-9a-f]{16}$/.test(body.clone) ? body.clone : '';
+    const refText = clone ? String(body.refText || '').replace(/\s+/g, ' ').trim().slice(0, 600) : '';
+    return { instruction, seed, clone, refText };
+}
+
+function cloneFile(id) {
+    return path.join(VOICES_DIR, `clone-${id}.wav`);
+}
+
+// The browser sends the user's voice sample as a short mono 16-bit WAV (it does the decoding and
+// trimming); keep it so every sentence can be cloned from it.
+async function handleCloneSample(req, res) {
+    let wav;
+    try { wav = await readBody(req, 8 * 1024 * 1024); }
+    catch { return json(res, 413, { error: 'That audio sample is too large.' }); }
+    if (wav.length < 1000 || wav.toString('latin1', 0, 4) !== 'RIFF' || wav.toString('latin1', 8, 12) !== 'WAVE') {
+        return json(res, 400, { error: 'The sample must be a WAV file.' });
+    }
+    const id = crypto.createHash('sha1').update(wav).digest('hex').slice(0, 16);
+    const file = cloneFile(id);
+    if (!fs.existsSync(file)) {
+        fs.writeFileSync(file + '.tmp', wav);
+        fs.renameSync(file + '.tmp', file);
+        console.log(`  [voice] saved a voice sample (${(wav.length / 1024).toFixed(0)} KB)`);
+    }
+    json(res, 200, { ok: true, id });
 }
 
 // Make sure a voice is designed (called when conversation mode opens, or the voice changes).
@@ -766,7 +793,11 @@ async function handleVoice(req, res) {
     let body;
     try { body = await readJson(req); }
     catch { return json(res, 400, { error: 'Invalid JSON body' }); }
-    const { instruction, seed } = parseVoice(body);
+    const { instruction, seed, clone } = parseVoice(body);
+    if (clone) {
+        return fs.existsSync(cloneFile(clone)) ? json(res, 200, { ok: true, key: clone })
+                                               : json(res, 404, { error: 'The voice sample is missing from this server. Upload it again.' });
+    }
     if (!instruction) return json(res, 400, { error: 'No voice description' });
     try {
         await designedVoice(instruction, seed);
@@ -785,7 +816,7 @@ async function handleTTS(req, res) {
 
     const text = String(body.text || '').replace(/\s+/g, ' ').trim().slice(0, 800);
     if (!text) return json(res, 400, { error: 'No text provided' });
-    const { instruction, seed } = parseVoice(body);
+    const { instruction, seed, clone, refText } = parseVoice(body);
 
     let hungUp = false;
     let upstream = null;
@@ -797,7 +828,14 @@ async function handleTTS(req, res) {
     try {
         let fields = { text, seed, cfg_scale: 1 };
         let files = {};
-        if (instruction) {
+        if (clone) {
+            if (!refText) return json(res, 400, { error: 'The voice sample needs a transcript.' });
+            let ref;
+            try { ref = fs.readFileSync(cloneFile(clone)); }
+            catch { return json(res, 404, { error: 'The voice sample is missing from this server. Upload it again.' }); }
+            fields.ref_text = refText;
+            files = { ref_audio: { name: 'voice.wav', data: ref, type: 'audio/wav' } };
+        } else if (instruction) {
             const ref = await designedVoice(instruction, seed);
             fields.ref_text = VOICE_SAMPLE;
             files = { ref_audio: { name: 'voice.wav', data: ref, type: 'audio/wav' } };
@@ -1167,6 +1205,7 @@ function route(req, res) {
     if (route === 'POST /api/chat')       return handleChat(req, res).catch(fail);
     if (route === 'POST /api/tts')        return handleTTS(req, res).catch(fail);
     if (route === 'POST /api/tts/voice')  return handleVoice(req, res).catch(fail);
+    if (route === 'POST /api/tts/sample') return handleCloneSample(req, res).catch(fail);
     if (route === 'POST /api/fetch-url')  return handleFetchUrl(req, res).catch(fail);
     if (route === 'POST /api/transcribe') return handleTranscribe(req, res, search).catch(fail);
     if (route === 'GET /api/status')      return handleStatus(res).catch(fail);

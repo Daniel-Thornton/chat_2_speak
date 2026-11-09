@@ -107,8 +107,9 @@ export async function getStatus() {
 }
 
 // Ask the server to design (and cache) a Breeze voice ahead of the first sentence.
+// (A cloned voice needs no design step; this just checks the server still has its sample.)
 export async function prepareVoice(voice) {
-    if (!voice?.instruction) return { ok: true };
+    if (!voice?.instruction && !voice?.clone) return { ok: true };
     try {
         const r = await fetch(apiUrl('/api/tts/voice'), {
             method: 'POST',

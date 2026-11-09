@@ -1608,6 +1608,11 @@ body.resizing { cursor: ns-resize; user-select: none; }
 /* Settings → Tools: home and Google Calendar */
 .settings-sub { display: flex; flex-direction: column; gap: 6px; margin: -4px 0 4px 22px; font-size: 13px; }
 .settings-sub .settings-row input { flex: 1; min-width: 160px; }
+/* Settings → Voice: describe a voice, or clone one from an audio sample */
+.voice-group { display: contents; }
+.voice-group[hidden] { display: none; }
+#voice-clone input[type="file"] { flex: 1; min-width: 0; font-size: 13px; }
+#voice-clone [hidden] { display: none; }
 .gcal-state { font-size: 13px; }
 .gcal-state.ok { color: #2e7d32; }
 .gcal-state.err { color: #b3261e; }

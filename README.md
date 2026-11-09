@@ -98,6 +98,8 @@ The server adapts the setting to what each model supports, using `/api/show`. Mo
 
 Breeze *designs* a voice from a written description (Settings → Voice). It speaks one sample sentence in that voice, saves it as `voices/<hash>.wav`, and then *clones* that clip for every sentence after, so the voice stays consistent. Change the description or the *Variation* number (🎲) to get a different voice, and use ▶ Preview to hear it. Each new voice takes about 4 s to design the first time.
 
+**Cloning a real voice.** Under *Clone a voice from an audio sample* (Settings → Voice) you can upload a recording instead (WAV, MP3, M4A, OGG, anything your browser can play). The browser cuts it to about 10 s of the first clear speech, Whisper writes a transcript (you can correct it), and Breeze clones that clip for every sentence, replacing the description. Use clean speech from one person, with no music or background noise. The clip is stored as `voices/clone-<hash>.wav`; *Remove sample* goes back to the described voice. Only clone voices you have permission to use.
+
 The model can also use `(laugh)`, `(sigh)`, `(cough)` and `(clears throat)`, which Breeze performs as sounds.
 
 If Breeze isn't running yet, the browser's built-in voice is used until it is.

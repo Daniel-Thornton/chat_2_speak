@@ -108,15 +108,40 @@
                     </label>
                     </div>
                     <div class="settings-panel" id="settings-panel-voice" role="tabpanel" aria-labelledby="settings-tab-voice">
-                        <label for="voice-preset">
-                            Voice
-                            <select id="voice-preset"></select>
-                        </label>
-                        <label for="voice-instruction">
-                            Voice description
-                            <span class="label-hint">Breeze designs the voice from this. Edit it freely: age, accent, tone, pace.</span>
-                            <textarea id="voice-instruction" rows="4"></textarea>
-                        </label>
+                        <div class="settings-check" role="radiogroup" aria-label="Where the voice comes from">
+                            <label class="settings-check">
+                                <input type="radio" name="voice-mode" id="voice-mode-describe" value="describe">
+                                Describe a voice
+                            </label>
+                            <label class="settings-check">
+                                <input type="radio" name="voice-mode" id="voice-mode-clone" value="clone">
+                                Clone a voice from an audio sample
+                            </label>
+                        </div>
+                        <div class="voice-group" id="voice-describe">
+                            <label for="voice-preset">
+                                Voice
+                                <select id="voice-preset"></select>
+                            </label>
+                            <label for="voice-instruction">
+                                Voice description
+                                <span class="label-hint">Breeze designs the voice from this. Edit it freely: age, accent, tone, pace.</span>
+                                <textarea id="voice-instruction" rows="4"></textarea>
+                            </label>
+                        </div>
+                        <div class="voice-group" id="voice-clone">
+                            <span class="label-hint">Upload a recording of someone speaking and Breeze will copy that voice. Use about 5–10 s of clear speech from one person with no music or background noise (longer clips are cut to 10 s). Only clone a voice you have permission to use.</span>
+                            <div class="settings-row">
+                                <input type="file" id="voice-clone-file" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.webm">
+                                <button type="button" id="voice-clone-remove" class="btn" hidden>Remove sample</button>
+                            </div>
+                            <span class="label-hint" id="voice-clone-status"></span>
+                            <label for="voice-clone-text" id="voice-clone-text-label" hidden>
+                                What is said in the sample
+                                <span class="label-hint">Filled in automatically. Correct it if it's wrong, since a matching transcript gives a closer voice.</span>
+                                <textarea id="voice-clone-text" rows="3"></textarea>
+                            </label>
+                        </div>
                         <div class="settings-row">
                             <label for="voice-seed" class="settings-inline">
                                 Variation

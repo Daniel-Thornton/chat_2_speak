@@ -1,4 +1,5 @@
 import { setApiBase, hasApi, apiUrl, streamChat, transcribe, getStatus, prepareVoice, listModels, subscribeEvents, agentData, postSetting, calendarStatus, removeCalendar, keepStatus, audioContext } from './js/api.js';
+import { prepareVoiceSample } from './js/voice-sample.js';
 import { Conversation } from './js/conversation.js';
 import { SpeechPlayer } from './js/speech-player.js';
 import { SentenceChunker, cleanForSpeech } from './js/speech-text.js';
@@ -55,6 +56,8 @@ const DEFAULTS = {
     voicePreset: 'warm',
     voiceInstruction: VOICE_PRESETS[0].instruction,
     voiceSeed: VOICE_PRESETS[0].seed,
+    voiceMode: 'describe', // 'describe' = Breeze designs the voice from the description; 'clone' = copy the voice sample
+    voiceClone: null,   // { id, text, name, seconds }: a voice sample to clone instead of the description
     bargeIn: true,
     headphones: false,
     endSilenceMs: 750,
@@ -95,6 +98,13 @@ const voiceSeedIn      = $('voice-seed');
 const voiceRerollBtn   = $('voice-reroll');
 const voicePreviewBtn  = $('voice-preview');
 const voicePreviewStat = $('voice-preview-status');
+const modeDescribeIn   = $('voice-mode-describe');
+const modeCloneIn      = $('voice-mode-clone');
+const cloneFileIn      = $('voice-clone-file');
+const cloneRemoveBtn   = $('voice-clone-remove');
+const cloneStatus      = $('voice-clone-status');
+const cloneTextIn      = $('voice-clone-text');
+const cloneTextLabel   = $('voice-clone-text-label');
 const bargeInIn        = $('barge-in');
 const headphonesIn     = $('headphones');
 const endSilenceIn     = $('end-silence');
@@ -147,6 +157,8 @@ let convMode = false;
 let statusTimer = null;
 let lastStatus = {};
 let previewVoice = null;
+let cloneDraft = null;      // the voice sample shown in the settings form (saved with Save)
+let cloneBusy = false;
 
 // ── Boot ──
 
@@ -186,7 +198,11 @@ function loadSettings() {
 }
 
 function currentVoice() {
-    return previewVoice || { instruction: settings.voiceInstruction || '', seed: Number(settings.voiceSeed) || 0 };
+    if (previewVoice) return previewVoice;
+    const c = settings.voiceClone;
+    const seed = Number(settings.voiceSeed) || 0;
+    if (settings.voiceMode === 'clone' && c?.id && c.text?.trim()) return { clone: c.id, refText: c.text.trim(), seed };
+    return { instruction: settings.voiceInstruction || '', seed };
 }
 
 function applySettings() {
@@ -205,6 +221,11 @@ function applySettings() {
     voicePresetIn.value = settings.voicePreset || 'custom';
     voiceInstrIn.value  = settings.voiceInstruction || '';
     voiceSeedIn.value   = settings.voiceSeed ?? 0;
+    cloneDraft = settings.voiceClone?.id ? { ...settings.voiceClone } : null;
+    cloneFileIn.value = '';
+    (settings.voiceMode === 'clone' ? modeCloneIn : modeDescribeIn).checked = true;
+    showClone();
+    showVoiceMode();
     bargeInIn.checked   = !!settings.bargeIn;
     headphonesIn.checked = !!settings.headphones;
     endSilenceIn.value  = String(settings.endSilenceMs);
@@ -229,6 +250,8 @@ function persistSettings() {
     settings.voicePreset      = voicePresetIn.value;
     settings.voiceInstruction = voiceInstrIn.value.trim();
     settings.voiceSeed        = Math.max(0, parseInt(voiceSeedIn.value, 10) || 0);
+    settings.voiceMode        = modeCloneIn.checked ? 'clone' : 'describe';
+    settings.voiceClone       = cloneDraft ? { ...cloneDraft, text: cloneTextIn.value.trim() } : null;
     settings.bargeIn          = bargeInIn.checked;
     settings.headphones       = headphonesIn.checked;
     settings.endSilenceMs     = Number(endSilenceIn.value) || DEFAULTS.endSilenceMs;
@@ -248,7 +271,54 @@ function persistSettings() {
 }
 
 function formVoice() {
-    return { instruction: voiceInstrIn.value.trim(), seed: Math.max(0, parseInt(voiceSeedIn.value, 10) || 0) };
+    const seed = Math.max(0, parseInt(voiceSeedIn.value, 10) || 0);
+    const text = cloneTextIn.value.trim();
+    if (modeCloneIn.checked && cloneDraft?.id && text) return { clone: cloneDraft.id, refText: text, seed };
+    return { instruction: voiceInstrIn.value.trim(), seed };
+}
+
+// Show only the half of the Voice tab that the chosen mode uses.
+function showVoiceMode() {
+    const clone = modeCloneIn.checked;
+    $('voice-describe').hidden = clone;
+    $('voice-clone').hidden = !clone;
+    voicePreviewStat.textContent = '';
+}
+
+// Show the voice-sample part of the Voice tab for the current draft.
+function showClone(message) {
+    cloneRemoveBtn.hidden = !cloneDraft;
+    cloneTextLabel.hidden = !cloneDraft;
+    cloneTextIn.value = cloneDraft?.text || '';
+    cloneStatus.textContent = message || cloneStatusText();
+}
+
+function cloneStatusText() {
+    if (!cloneDraft) return 'Choose an audio file to clone.';
+    if (!cloneDraft.text?.trim()) return `"${cloneDraft.name}": write what is said in it below. Until you do, the described voice is used.`;
+    return `Using your sample "${cloneDraft.name}" (${cloneDraft.seconds.toFixed(1)} s).`;
+}
+
+async function loadCloneSample(file) {
+    if (!file || cloneBusy) return;
+    if (!hasApi()) { showClone('Open the app through its server to upload a sample.'); return; }
+    cloneBusy = true;
+    cloneFileIn.disabled = voicePreviewBtn.disabled = true;
+    try {
+        const sample = await prepareVoiceSample(file, {
+            language: settings.sttLanguage,
+            onStep: msg => { cloneStatus.textContent = msg; }
+        });
+        cloneDraft = sample;
+        showClone();
+        if (!sample.text) cloneStatus.textContent = `Couldn't transcribe "${sample.name}". Type what is said in it below.`;
+    } catch (err) {
+        showClone(err.message);
+    } finally {
+        cloneBusy = false;
+        cloneFileIn.disabled = voicePreviewBtn.disabled = false;
+        cloneFileIn.value = '';
+    }
 }
 
 function showVoicePromptStatus() {
@@ -270,11 +340,21 @@ function setupVoiceSettings() {
         if (p && p.instruction !== voiceInstrIn.value.trim()) voicePresetIn.value = 'custom';
     });
     voiceRerollBtn.addEventListener('click', () => { voiceSeedIn.value = Math.floor(Math.random() * 100000); });
+    modeDescribeIn.addEventListener('change', showVoiceMode);
+    modeCloneIn.addEventListener('change', showVoiceMode);
+    cloneFileIn.addEventListener('change', () => loadCloneSample(cloneFileIn.files[0]));
+    cloneRemoveBtn.addEventListener('click', () => { cloneDraft = null; showClone(); });
+    cloneTextIn.addEventListener('input', () => {
+        if (!cloneDraft) return;
+        cloneDraft.text = cloneTextIn.value;
+        cloneStatus.textContent = cloneStatusText();
+    });
     voicePreviewBtn.addEventListener('click', async () => {
         const v = formVoice();
-        if (!v.instruction) { voicePreviewStat.textContent = 'Write a voice description first.'; return; }
+        if (modeCloneIn.checked && !v.clone) { voicePreviewStat.textContent = cloneDraft ? 'Write what is said in the sample first.' : 'Choose an audio sample to clone first.'; return; }
+        if (!v.clone && !v.instruction) { voicePreviewStat.textContent = 'Write a voice description first.'; return; }
         voicePreviewBtn.disabled = true;
-        voicePreviewStat.textContent = 'Designing the voice (a few seconds the first time)…';
+        voicePreviewStat.textContent = v.clone ? 'Checking the voice sample…' : 'Designing the voice (a few seconds the first time)…';
         const r = await prepareVoice(v);
         voicePreviewBtn.disabled = false;
         if (!r.ok) { voicePreviewStat.textContent = r.error || 'Breeze TTS is not available.'; return; }
