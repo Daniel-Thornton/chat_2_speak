@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local speech-to-text for DanGPT voice conversations.
 
-faster-whisper on the GPU. POST /transcribe takes raw 16 kHz mono signed 16-bit PCM (what the
+faster-whisper, on the GPU or the CPU (STT_DEVICE). POST /transcribe takes raw 16 kHz mono signed 16-bit PCM (what the
 browser's microphone capture sends) and answers {"text": ...}. Silero VAD (bundled with
 faster-whisper) drops clips that hold no speech, and a short blocklist catches Whisper's
 favourite hallucinations on noise ("Thanks for watching!").
@@ -13,6 +13,7 @@ Environment:
   STT_MODEL     faster-whisper model name or path (default large-v3-turbo)
   STT_LANGUAGE  language code, or "auto" (default en)
   STT_DEVICE    cuda or cpu (default cuda)
+  STT_CPU_THREADS  CPU threads when STT_DEVICE=cpu (default: one per physical core)
   STT_PORT      port (default 8890)
 """
 
@@ -55,6 +56,9 @@ MODEL_NAME = os.environ.get("STT_MODEL", "large-v3-turbo")
 LANGUAGE = os.environ.get("STT_LANGUAGE", "en")
 DEVICE = os.environ.get("STT_DEVICE", "cuda")
 PORT = int(os.environ.get("STT_PORT", "8890"))
+# faster-whisper uses 4 CPU threads unless told otherwise. One per physical core was ~1.6x faster
+# on a 12-core Ryzen. Hyperthreads don't help this workload.
+CPU_THREADS = int(os.environ.get("STT_CPU_THREADS") or max(1, (os.cpu_count() or 8) // 2))
 SAMPLE_RATE = 16000
 MAX_SECONDS = 60
 
@@ -77,9 +81,11 @@ def load_model():
         from faster_whisper import WhisperModel
 
         t0 = time.time()
-        print(f"  Loading Whisper '{MODEL_NAME}' on {DEVICE} (first run downloads it)...", flush=True)
-        compute = "float16" if DEVICE == "cuda" else "int8"
-        m = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=compute)
+        on_cpu = DEVICE == "cpu"
+        where = f"cpu, {CPU_THREADS} threads" if on_cpu else DEVICE
+        print(f"  Loading Whisper '{MODEL_NAME}' on {where} (first run downloads it)...", flush=True)
+        compute = "int8" if on_cpu else "float16"
+        m = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=compute, cpu_threads=CPU_THREADS if on_cpu else 0)
         # Warm up the exact decode path real requests use (beam search, and the Silero VAD), so
         # one-time kernel setup (CUDA JIT on new GPUs can take ~30 s) happens now, not mid-conversation.
         t = np.arange(SAMPLE_RATE * 2) / SAMPLE_RATE

@@ -9,14 +9,35 @@ Double-click **`launch.bat`**. It starts whatever isn't already running:
 | Service | Port | What it does |
 | --- | --- | --- |
 | Ollama | 11434 | The LLM |
-| Breeze TTS 2 | 7860 | The voice. Uses about 9 GB of VRAM and takes 1–2 min to warm up. If it's already running it's reused. Pass `-BreezeFastAll` for Breeze's full `--fast-all` mode: first audio comes about 100 ms sooner, but it uses about 16 GB, so it's only worth it on a 24 GB+ card. |
-| Whisper STT (`stt/stt_server.py`) | 8890 | Speech recognition: faster-whisper `large-v3-turbo` on the GPU, about 2 GB |
+| Breeze TTS 2 ([Breeze-TTS-2.cpp](https://github.com/HoppouAI/Breeze-TTS-2.cpp), CUDA, Q8_0) | 7860 | The voice. Uses about 4 GB of VRAM and starts in about 5 s. If it's already running it's reused. Pass `-BreezePyTorch` to use the official PyTorch server instead (about 9 GB). With it, `-BreezeFastAll` turns on its full `--fast-all` mode (about 16 GB, so only for a 24 GB+ card). |
+| Whisper STT (`stt/stt_server.py`) | 8890 | Speech recognition: faster-whisper `small.en` on the CPU, which takes about 1.7 s per utterance on a 12-core Ryzen. `-WhisperOnGpu` uses `large-v3-turbo` on the GPU instead (about 2.5 GB of VRAM, faster and more accurate). |
 | DanGPT server (`server.js`) | 8788 | Serves the app and connects it to the services above |
 | Cloudflare tunnel | – | Gives you a public https URL for use on your phone |
 
 Open **http://localhost:8788** on this PC, or the `trycloudflare.com` URL from anywhere else. When you open the page from either of those addresses, leave Settings → Server URL blank. Use `start-tunnel.ps1 -NoTunnel` to skip the tunnel, and `-Model qwen3.5:4b` to choose which model gets pulled on first run.
 
-On first run the launcher builds `stt/.venv` and downloads the Whisper model (about 1.6 GB). Whisper borrows its CUDA libraries (cuBLAS and cuDNN) from Breeze's PyTorch install. If Breeze isn't there, it installs NVIDIA's pip wheels instead (`stt/requirements-cuda.txt`, about 1 GB). Breeze is expected at `..\..\breeze-tts` with its own `.venv`. Set `BREEZE_DIR` to use a different folder.
+On first run the launcher builds `stt/.venv` and downloads the Whisper model. With `-WhisperOnGpu`, Whisper borrows its CUDA libraries (cuBLAS and cuDNN) from Breeze's PyTorch install. If that isn't there, it installs NVIDIA's pip wheels instead (`stt/requirements-cuda.txt`, about 1 GB).
+
+**Breeze-TTS-2.cpp** is expected at `..\..\breeze-tts-cpp` (set `BREEZE_CPP_DIR` to use a different folder):
+
+```
+breeze-tts-cpp\
+  cuda-bin\   breeze-server.exe and its DLLs, built with CUDA (cuBLAS and the VC++ runtime included)
+  models\     breeze-tts-2-q8_0.gguf, downloaded and checksum-verified by the launcher on first run
+```
+
+Use a CUDA build. The project's prebuilt Vulkan release ran at only 0.7–1.0× real time on an RTX 50-series card, against 4× for CUDA. To build it, you need the CUDA toolkit, CMake, Ninja and Visual Studio's C++ tools. Run this in a VS x64 developer prompt (`120` targets RTX 50-series cards):
+
+```
+git clone --recursive --branch v0.1.7 https://github.com/HoppouAI/Breeze-TTS-2.cpp src
+cd src
+cmake -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release -DBREEZE_CUDA=ON -DBREEZE_VULKAN=OFF -DCMAKE_CUDA_ARCHITECTURES=120 -DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler
+cmake --build build-cuda
+```
+
+Then copy `breeze-server.exe` and the `.dll`s from `build-cuda` into `cuda-bin`, along with `cublas64_13.dll` and `cublasLt64_13.dll` from the CUDA toolkit's `bin\x64`. The folder then runs on another PC without the toolkit, as long as its NVIDIA driver supports CUDA 13.
+
+The PyTorch Breeze (`-BreezePyTorch`) is expected at `..\..\breeze-tts` with its own `.venv`. Set `BREEZE_DIR` to use a different folder.
 
 ## Voice mode
 
@@ -49,7 +70,7 @@ Just ask, in text or voice. It uses Ollama's tool calling, and every model you h
 - **Home:** weather and journeys use your home when you don't say where. Set it in the Tools tab, or just tell it ("I live in Leith"). A postcode or address makes journeys start from your door; a town means its centre.
 - **Calendar:** "what's on tomorrow?", "when's my dentist?", "am I free on Friday afternoon?", "what does next week look like?". It reads your calendar from its secret iCal address, repeating events included. It can't change the calendar: for "add lunch with Sarah on Friday at 1" it shows a link that opens Google Calendar with the event filled in, and you press Save. Moving or deleting events you do in Google Calendar itself. See [Adding your calendar](#adding-your-calendar) below.
 - **Google Keep:** "make a note that the boiler code is 4417", "add milk and eggs to my shopping list", "I've got the eggs", "what did I note about the boiler?". Notes and lists go into your real Keep, so they're on your phone too. While Keep is connected, lists go there instead of DanGPT's own lists. See [Connecting Google Keep](#connecting-google-keep) below.
-- **YouTube:** "find YungFika's rage room stream and tell me if he talked about the H3 drama", "what are the highlights of this video?", or paste a video link. It searches YouTube and reads the video's captions (its own, or YouTube's automatic ones), all free with no key. For a question about a long video, it picks out the parts that best match and puts links on screen that jump to those moments. **Videos with no captions** (often long livestreams) are transcribed on this PC by Whisper, in the background. The audio comes via yt-dlp, which the launcher installs and keeps up to date. On the 5090 a 5½-hour stream took under 3 minutes, and voice mode keeps working meanwhile. It tells you when the transcript is ready, with a Windows notification if no DanGPT page is open. Transcripts are kept in `data/transcripts/`, so each video is only read once. Whisper skips singing, so music videos without captions come out empty.
+- **YouTube:** "find YungFika's rage room stream and tell me if he talked about the H3 drama", "what are the highlights of this video?", or paste a video link. It searches YouTube and reads the video's captions (its own, or YouTube's automatic ones), all free with no key. For a question about a long video, it picks out the parts that best match and puts links on screen that jump to those moments. **Videos with no captions** (often long livestreams) are transcribed on this PC by Whisper, in the background. The audio comes via yt-dlp, which the launcher installs and keeps up to date. With `-WhisperOnGpu` on the 5090, a 5½-hour stream took under 3 minutes. On the CPU (the default) it takes much longer. Voice mode keeps working meanwhile. It tells you when the transcript is ready, with a Windows notification if no DanGPT page is open. Transcripts are kept in `data/transcripts/`, so each video is only read once. Whisper skips singing, so music videos without captions come out empty.
 - **Web search:** with a Brave key (Tools tab).
 - **Links:** "give me a few links for…". Links it shares appear under its reply, and in voice mode in a **Links** box in the voice panel, so you can click them while you talk. Each one is checked first: addresses from a web search are trusted, and anything else is test-loaded, so made-up or dead links are left out. The search results it looked at are folded away under the reply too.
 
@@ -96,7 +117,7 @@ The server adapts the setting to what each model supports, using `/api/show`. Mo
 
 ## The voice
 
-Breeze *designs* a voice from a written description (Settings → Voice). It speaks one sample sentence in that voice, saves it as `voices/<hash>.wav`, and then *clones* that clip for every sentence after, so the voice stays consistent. Change the description or the *Variation* number (🎲) to get a different voice, and use ▶ Preview to hear it. Each new voice takes about 4 s to design the first time.
+Breeze *designs* a voice from a written description (Settings → Voice). It speaks one sample sentence in that voice, saves it as `voices/<hash>.wav`, and then *clones* that clip for every sentence after, so the voice stays consistent. Change the description or the *Variation* number (🎲) to get a different voice, and use ▶ Preview to hear it. Each new voice takes about 2 s to design the first time.
 
 **Cloning a real voice.** Under *Clone a voice from an audio sample* (Settings → Voice) you can upload a recording instead (WAV, MP3, M4A, OGG, anything your browser can play). The browser cuts it to about 10 s of the first clear speech, Whisper writes a transcript (you can correct it), and Breeze clones that clip for every sentence, replacing the description. Use clean speech from one person, with no music or background noise. The clip is stored as `voices/clone-<hash>.wav`; *Remove sample* goes back to the described voice. Only clone voices you have permission to use.
 
