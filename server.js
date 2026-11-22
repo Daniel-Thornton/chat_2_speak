@@ -207,10 +207,18 @@ function braveSearch(query, apiKey) {
             headers: { 'Accept': 'application/json', 'Accept-Encoding': 'identity', 'X-Subscription-Token': apiKey }
         }, res => {
             collect(res).then(b => {
-                try { resolve(JSON.parse(b.toString())); }
-                catch { reject(new Error('Invalid JSON from Brave')); }
+                let data;
+                try { data = JSON.parse(b.toString()); }
+                catch { return reject(new Error(`Brave answered HTTP ${res.statusCode} with no usable reply`)); }
+                // (a bad key, a used-up plan or rate limit comes back as an error body, not results)
+                if (res.statusCode >= 400 || data?.type === 'ErrorResponse') {
+                    const e = data?.error || {};
+                    return reject(new Error(`Brave HTTP ${res.statusCode}${e.code ? ` ${e.code}` : ''}${e.detail ? `: ${e.detail}` : ''}`));
+                }
+                resolve(data);
             }, reject);
         });
+        req.setTimeout(15000, () => req.destroy(new Error('Brave did not answer within 15 s')));
         req.on('error', reject);
         req.end();
     });
@@ -237,6 +245,7 @@ async function runTool(call, ctx) {
             for (const l of links) ctx.knownUrls?.add(normUrl(l.url));
             return { content: formatSearchResults(data), links };
         } catch (err) {
+            console.warn(`  [search] failed: ${err.message}`);
             return { content: `Search failed: ${err.message}` };
         }
     }
