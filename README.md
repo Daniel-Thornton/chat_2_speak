@@ -9,7 +9,7 @@ Double-click **`launch.bat`**. It starts whatever isn't already running:
 | Service | Port | What it does |
 | --- | --- | --- |
 | Ollama | 11434 | The LLM |
-| Breeze TTS 2 (`--fast-all`) | 7860 | The voice. Uses about 16 GB of VRAM and takes 1.5–2.5 min to warm up. If it's already running it's reused. |
+| Breeze TTS 2 | 7860 | The voice. Uses about 9 GB of VRAM and takes 1–2 min to warm up. If it's already running it's reused. Pass `-BreezeFastAll` for Breeze's full `--fast-all` mode: first audio comes about 100 ms sooner, but it uses about 16 GB, so it's only worth it on a 24 GB+ card. |
 | Whisper STT (`stt/stt_server.py`) | 8890 | Speech recognition: faster-whisper `large-v3-turbo` on the GPU, about 2 GB |
 | DanGPT server (`server.js`) | 8788 | Serves the app and connects it to the services above |
 | Cloudflare tunnel | – | Gives you a public https URL for use on your phone |

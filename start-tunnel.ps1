@@ -2,18 +2,21 @@
 #
 # Starts (if not already running):
 #   Ollama            LLM                       :11434
-#   Breeze TTS 2      voice (--fast-all)        :7860   ~16 GB VRAM, ~1.5-2.5 min warm-up
-#   Whisper STT       speech recognition        :8890   ~2 GB VRAM
+#   Breeze TTS 2      voice                     :7860   ~9 GB VRAM (~16 GB with -BreezeFastAll), ~1-2 min warm-up
+#   Whisper STT       speech recognition        :8890   ~2.5 GB VRAM
 #   DanGPT server     the app + API             :8788
 #   Cloudflare tunnel public https URL -> :8788 (optional: pass -NoTunnel to use it on this PC only)
 #
-# Options: -NoTunnel, -NoBrowser (with -NoTunnel: don't open a browser tab), -Model <ollama model>
+# Options: -NoTunnel, -NoBrowser (with -NoTunnel: don't open a browser tab), -Model <ollama model>,
+#          -BreezeFastAll (Breeze's full --fast-all: ~100 ms quicker to first audio, ~7 GB more VRAM;
+#          only worth it on a 24 GB+ card)
 #
 # Breeze is reused if it's already up, so re-running this script doesn't pay the warm-up again.
 
 param(
     [switch]$NoTunnel,
     [switch]$NoBrowser,
+    [switch]$BreezeFastAll,
     [string]$Model = "llama3.2"   # pulled on first run if missing
 )
 
@@ -72,7 +75,14 @@ if (-not $haveModel) {
     & ollama pull $Model
 }
 
-# ---------- Breeze TTS 2 (--fast-all) ---------------------------------------
+# ---------- Breeze TTS 2 -----------------------------------------------------
+#
+# By default only the per-token stages run as CUDA graphs (backbone decode, depth decoder, codec).
+# Those set the real-time speed. --fast-all adds ~54 text-encoder/prefill graphs, which only shave
+# ~100 ms off the first audio of each sentence but hold ~7 GB of VRAM. On a 16 GB card that pushes
+# Breeze, Whisper and Ollama into shared system memory, which is far slower than staying in VRAM.
+# Measured on Windows (RTX 5090): --fast-all 16.0 GB, 3.4x real time, 106 ms to first audio;
+# default 9.2 GB, 3.2x real time, ~220 ms to first audio.
 
 $breezeDir = if ($env:BREEZE_DIR) { $env:BREEZE_DIR } else { Join-Path $root "..\..\breeze-tts" }
 $breezeDir = [System.IO.Path]::GetFullPath($breezeDir)
@@ -84,13 +94,14 @@ if ($breezeStatus -eq 200) {
 } elseif ($breezeStatus -eq 503) {
     Write-Host "Breeze TTS is already starting up (still warming up)."
 } elseif (Test-Path $breezePy) {
+    $breezeFlags = if ($BreezeFastAll) { @("--fast-all") } else { @("--fast-backbone-decode", "--fast-depth-decoder", "--fast-codec") }
     Write-Host ""
-    Write-Host "Starting Breeze TTS with --fast-all (CUDA graphs; warms up for ~1.5-2.5 minutes)..." -ForegroundColor Cyan
+    Write-Host "Starting Breeze TTS ($($breezeFlags -join ' '); warms up for ~1-2 minutes)..." -ForegroundColor Cyan
     Write-Host "  The browser voice stands in until it's ready."
     # Inductor's static CUDA launcher overflows a 32-bit C long on Windows, so it's switched off.
     $env:TORCHINDUCTOR_USE_STATIC_CUDA_LAUNCHER = "0"
     Start-Process $breezePy `
-        -ArgumentList "-m", "breeze_infer.api", "BreezeBlue/breeze-tts-2", "--host", "127.0.0.1", "--port", "7860", "--fast-all" `
+        -ArgumentList (@("-m", "breeze_infer.api", "BreezeBlue/breeze-tts-2", "--host", "127.0.0.1", "--port", "7860") + $breezeFlags) `
         -WorkingDirectory $breezeDir -WindowStyle Minimized
 } else {
     Write-Host "Breeze TTS not found at $breezeDir (set BREEZE_DIR to its folder). Using the browser voice." -ForegroundColor Yellow
